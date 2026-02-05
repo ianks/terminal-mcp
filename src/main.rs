@@ -7,10 +7,7 @@ use tracing_subscriber::{self, EnvFilter};
 async fn main() -> Result<()> {
     // Initialize logging to stderr to avoid interfering with stdout JSON-RPC
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into())
-        )
+        .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
         .with_writer(std::io::stderr)
         .with_ansi(false)
         .init();
@@ -20,14 +17,11 @@ async fn main() -> Result<()> {
 
     // Create the terminal service
     let service = TerminalService::new();
-    
+
     // Serve using stdio transport
-    let serving = service
-        .serve(stdio())
-        .await
-        .inspect_err(|e| {
-            tracing::error!("Failed to start service: {:?}", e);
-        })?;
+    let serving = service.serve(stdio()).await.inspect_err(|e| {
+        tracing::error!("Failed to start service: {:?}", e);
+    })?;
 
     // Wait for the service to complete
     serving.waiting().await?;

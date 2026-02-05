@@ -4,8 +4,9 @@ use tokio::sync::Mutex;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, tool::Parameters},
     model::*,
-    schemars, tool, tool_handler, tool_router, Error as McpError, RoleServer, ServerHandler,
+    schemars,
     service::RequestContext,
+    tool, tool_handler, tool_router, Error as McpError, RoleServer, ServerHandler,
 };
 use serde_json::json;
 use tracing::debug;
@@ -332,31 +333,29 @@ impl TerminalService {
                 )
             })?;
 
-        // Convert letter to control character
+        // Validate letter and pass it to send_control (which handles conversion)
         let control_char = if letter.to_uppercase() == "]" {
-            '\x1d' // ASCII 29 (GS - Group Separator) - the telnet escape character
+            ']'
         } else if letter.to_uppercase() == "ESCAPE" || letter.to_uppercase() == "ESC" {
-            '\x1b' // ASCII 27 (ESC - Escape)
+            '\x1b'
         } else {
-            // Validate input for standard control characters
-            let letter_upper = letter.to_uppercase();
-            if letter_upper.len() != 1 {
+            let letter_lower = letter.to_lowercase();
+            if letter_lower.len() != 1 {
                 return Err(McpError::invalid_params(
                     "Invalid control character letter",
                     Some(json!({"letter": letter})),
                 ));
             }
 
-            let c = letter_upper.chars().next().unwrap();
-            if !c.is_ascii_uppercase() {
+            let c = letter_lower.chars().next().unwrap();
+            if !c.is_ascii_lowercase() {
                 return Err(McpError::invalid_params(
                     "Invalid control character letter",
                     Some(json!({"letter": letter})),
                 ));
             }
 
-            // Convert to control code (A=1, B=2, etc.)
-            (c as u8 - b'A' + 1) as char
+            c
         };
 
         match self

@@ -52,42 +52,46 @@ impl BufferedCommandExecutor {
     /// Executes a command with intelligent buffering and output tracking.
     /// If there's unread output from a previous command, it will return an error
     /// with the unread output unless force_execute is true.
-    pub async fn execute_command(&self, command: &str, force_execute: bool) -> Result<ExecuteResult> {
+    pub async fn execute_command(
+        &self,
+        command: &str,
+        force_execute: bool,
+    ) -> Result<ExecuteResult> {
         let mut buffer_state = self.buffer_state.lock().await;
-        
+
         // Check if there's unread output from a previous command
         if buffer_state.unread_output && !force_execute {
             let current_buffer = self.retrieve_buffer().await?;
             let unread_output = self.extract_new_output(&buffer_state.last_read, &current_buffer);
-            
+
             // Mark as read now
             buffer_state.last_read = current_buffer;
             buffer_state.last_read_timestamp = Instant::now();
             buffer_state.unread_output = false;
-            
+
             return Err(TerminalError::UnreadOutput(format!(
-                "Unread output detected from previous command. Output:\n{}", 
+                "Unread output detected from previous command. Output:\n{}",
                 unread_output
             )));
         }
 
         // Get the buffer state before executing
         let before_buffer = self.retrieve_buffer().await?;
-        
+
         // Execute the command and wait for completion
         self.manager.write_line(&self.session_name, command).await?;
-        
+
         // Wait for the command to complete with buffer stabilization
         let after_buffer = self.wait_for_stable_buffer().await?;
-        
+
         // Extract the command output
         let output = self.extract_new_output(&before_buffer, &after_buffer);
-        
+
         // Update buffer state
         buffer_state.last_read = after_buffer.clone();
         buffer_state.last_read_timestamp = Instant::now();
         buffer_state.unread_output = false;
-        
+
         Ok(ExecuteResult {
             output,
             full_buffer: Some(after_buffer),
@@ -100,10 +104,10 @@ impl BufferedCommandExecutor {
     /// Useful for long-running commands where you want to check output periodically.
     pub async fn execute_command_async(&self, command: &str) -> Result<()> {
         let mut buffer_state = self.buffer_state.lock().await;
-        
+
         // Mark that we have pending unread output
         buffer_state.unread_output = true;
-        
+
         // Store the current buffer state
         let before_buffer = self.retrieve_buffer().await?;
         let mut pending = self.pending_command.lock().await;
@@ -112,10 +116,10 @@ impl BufferedCommandExecutor {
             timestamp: Instant::now(),
             before_buffer,
         });
-        
+
         // Execute without waiting
         self.manager.write_line(&self.session_name, command).await?;
-        
+
         Ok(())
     }
 
@@ -125,20 +129,20 @@ impl BufferedCommandExecutor {
         let mut buffer_state = self.buffer_state.lock().await;
         let current_buffer = self.retrieve_buffer().await?;
         let new_output = self.extract_new_output(&buffer_state.last_read, &current_buffer);
-        
+
         // Update the last read state
         buffer_state.last_read = current_buffer;
         buffer_state.last_read_timestamp = Instant::now();
-        
+
         // Check if the command is still running
         let is_complete = self.is_command_complete().await?;
-        
+
         if is_complete {
             buffer_state.unread_output = false;
             let mut pending = self.pending_command.lock().await;
             *pending = None;
         }
-        
+
         Ok(ReadResult {
             output: new_output,
             is_complete,
@@ -151,7 +155,7 @@ impl BufferedCommandExecutor {
         if !buffer_state.unread_output {
             return Ok(false);
         }
-        
+
         let current_buffer = self.retrieve_buffer().await?;
         Ok(current_buffer != buffer_state.last_read)
     }
@@ -162,10 +166,14 @@ impl BufferedCommandExecutor {
         if !buffer_state.unread_output {
             return Ok(None);
         }
-        
+
         let current_buffer = self.retrieve_buffer().await?;
         let unread = self.extract_new_output(&buffer_state.last_read, &current_buffer);
-        Ok(if unread.is_empty() { None } else { Some(unread) })
+        Ok(if unread.is_empty() {
+            None
+        } else {
+            Some(unread)
+        })
     }
 
     /// Retrieve the current terminal buffer
@@ -181,11 +189,11 @@ impl BufferedCommandExecutor {
         let mut stable_count = 0;
         let required_stable_checks = 3;
         let check_interval = Duration::from_millis(100);
-        
+
         while stable_count < required_stable_checks {
             sleep(check_interval).await;
             let current_buffer = self.retrieve_buffer().await?;
-            
+
             if current_buffer == previous_buffer {
                 stable_count += 1;
             } else {
@@ -193,7 +201,7 @@ impl BufferedCommandExecutor {
                 previous_buffer = current_buffer;
             }
         }
-        
+
         Ok(previous_buffer)
     }
 
@@ -201,11 +209,11 @@ impl BufferedCommandExecutor {
     async fn is_command_complete(&self) -> Result<bool> {
         // Wait a bit to ensure the buffer has settled
         sleep(Duration::from_millis(self.debounce_ms)).await;
-        
+
         let buffer1 = self.retrieve_buffer().await?;
         sleep(Duration::from_millis(self.debounce_ms)).await;
         let buffer2 = self.retrieve_buffer().await?;
-        
+
         // If buffer hasn't changed, command is likely complete
         Ok(buffer1 == buffer2)
     }
@@ -216,26 +224,26 @@ impl BufferedCommandExecutor {
         if before_buffer.is_empty() {
             return after_buffer.to_string();
         }
-        
+
         // If buffers are identical, no new output
         if before_buffer == after_buffer {
             return String::new();
         }
-        
+
         // If after buffer is shorter, something went wrong
         if after_buffer.len() < before_buffer.len() {
             return String::new();
         }
-        
+
         // Simple case: after buffer has content appended to before buffer
         if let Some(new_output) = after_buffer.strip_prefix(before_buffer) {
             return new_output.to_string();
         }
-        
+
         // More complex case: need to find where they diverge
         let before_lines: Vec<&str> = before_buffer.lines().collect();
         let after_lines: Vec<&str> = after_buffer.lines().collect();
-        
+
         // Find the first line that differs
         let mut first_different_line = None;
         for i in 0..before_lines.len().min(after_lines.len()) {
@@ -244,7 +252,7 @@ impl BufferedCommandExecutor {
                 break;
             }
         }
-        
+
         // If no differences found in common lines, new content is after the before buffer
         if first_different_line.is_none() {
             if after_lines.len() > before_lines.len() {
@@ -252,18 +260,18 @@ impl BufferedCommandExecutor {
             }
             return String::new();
         }
-        
+
         let first_different = first_different_line.unwrap();
-        
+
         // Check if the different line was partially appended to
         if first_different < before_lines.len() {
             let before_line = before_lines[first_different];
             let after_line = after_lines[first_different];
-            
+
             if let Some(appended_content) = after_line.strip_prefix(before_line) {
                 // Line was appended to
                 let remaining_lines = &after_lines[first_different + 1..];
-                
+
                 if !appended_content.is_empty() || !remaining_lines.is_empty() {
                     let mut result = appended_content.to_string();
                     if !remaining_lines.is_empty() {
@@ -276,7 +284,7 @@ impl BufferedCommandExecutor {
                 }
             }
         }
-        
+
         // Return everything from the first different line onward
         after_lines[first_different..].join("\n")
     }
