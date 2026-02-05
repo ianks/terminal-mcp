@@ -19,7 +19,7 @@ rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "mai
   "transport-io",
   "server",
 ] }
-schemars = "0.8"
+schemars = "1"
 
 [dev-dependencies]
 env_logger = "0.11"

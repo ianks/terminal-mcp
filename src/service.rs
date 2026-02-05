@@ -1,12 +1,12 @@
-use std::{collections::HashMap, future::Future, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 use rmcp::{
-    handler::server::{router::tool::ToolRouter, tool::Parameters},
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
     schemars,
     service::RequestContext,
-    tool, tool_handler, tool_router, Error as McpError, RoleServer, ServerHandler,
+    tool, tool_handler, tool_router, ErrorData as McpError, RoleServer, ServerHandler,
 };
 use serde_json::json;
 use tracing::debug;
@@ -473,6 +473,9 @@ impl ServerHandler for TerminalService {
             server_info: Implementation {
                 name: "terminal-mcp".to_string(),
                 version: "0.1.0".to_string(),
+                title: None,
+                icons: None,
+                website_url: None,
             },
             instructions: Some("This server provides terminal session management. Create sessions with specific commands (bash, ssh, python, etc.), execute commands, read output, and send control characters. All operations require a session_name parameter.".to_string()),
         }
@@ -480,7 +483,7 @@ impl ServerHandler for TerminalService {
 
     async fn initialize(
         &self,
-        _request: InitializeRequestParam,
+        _request: InitializeRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
         tracing::info!("Terminal MCP server initialized with 7 tools");

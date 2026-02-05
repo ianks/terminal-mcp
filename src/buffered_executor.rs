@@ -87,10 +87,9 @@ impl BufferedCommandExecutor {
         // Extract the command output
         let output = self.extract_new_output(&before_buffer, &after_buffer);
 
-        // Update buffer state
-        buffer_state.last_read = after_buffer.clone();
-        buffer_state.last_read_timestamp = Instant::now();
-        buffer_state.unread_output = false;
+        // DON'T update buffer_state.last_read here - let read_streaming_output still see this output
+        // This allows execute_command to be used alongside read_streaming_output
+        // Only async operations update the tracking state
 
         Ok(ExecuteResult {
             output,
